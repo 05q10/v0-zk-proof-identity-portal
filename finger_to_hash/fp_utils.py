@@ -57,38 +57,47 @@ def compare_fingerprints(img_path: str, stored_embedding: torch.Tensor) -> float
 
 
 # -----------------------------
-# 4️⃣ Function: embedding → SHA-256 hash
+# 4️⃣ Function: embedding + code → SHA-256 hash
 # -----------------------------
-def embedding_to_sha256(embedding: torch.Tensor) -> str:
+def embedding_to_sha256(embedding: torch.Tensor, code: str) -> str:
     """
-    Converts a tensor embedding to a SHA-256 hex string.
+    Converts a tensor embedding and an 6-digit alphanumeric code
+    into a deterministic SHA-256 hex string.
     """
+    # Validate code
+    if not isinstance(code, str) or len(code) != 6 or not code.isalnum():
+        raise ValueError("Code must be an 6-digit alphanumeric string (e.g., 'A1B2C3').")
+
     # Convert tensor to numpy array and bytes
-    arr = embedding.squeeze(0).numpy()  # remove batch dimension
+    arr = embedding.squeeze(0).detach().cpu().numpy()
     arr_bytes = arr.tobytes()
+
+    # Combine embedding bytes with the code (encoded as UTF-8)
+    combined = arr_bytes + code.encode('utf-8')
+
     # Compute SHA-256
-    sha256_hash = hashlib.sha256(arr_bytes).hexdigest()
+    sha256_hash = hashlib.sha256(combined).hexdigest()
     return sha256_hash
 
 # -----------------------------
 # 5️⃣ Function: image → SHA-256 hash
 # -----------------------------
-def image_to_fingerprint_hash(image_path: str) -> str:
+def image_to_fingerprint_hash(image_path: str, code: str) -> str:
     """
-    Complete pipeline: 
+    Complete pipeline:
     1️⃣ Image → embedding
-    2️⃣ Embedding → SHA-256 hash
+    2️⃣ Embedding + code → SHA-256 hash
     Returns hash string.
     """
     # Step 1: get normalized embedding
     embedding = get_fingerprint_embedding(image_path)
-    
-    # Step 2: convert embedding to SHA-256
-    sha_hash = embedding_to_sha256(embedding)
-    
+
+    # Step 2: convert embedding + code to SHA-256
+    sha_hash = embedding_to_sha256(embedding, code)
+
     return sha_hash
 
 if __name__ == "__main__":
     img_path = "demo_finger/100__M_Left_index_finger.bmp"
-    hash_val = image_to_fingerprint_hash(img_path)
+    hash_val = image_to_fingerprint_hash(img_path,"bx19D0")
     print(f"Fingerprint SHA-256 hash for {img_path} → {hash_val}")
