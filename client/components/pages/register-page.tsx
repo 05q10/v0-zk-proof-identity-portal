@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
+import axios from "axios"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
@@ -59,11 +60,16 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
   })
 
   // Step 3: Biometric
-  const [biometric, setBiometric] = useState({
-    fingerprintImage: "",
-    fingerprintHash: "",
-    passphrase: "",
-  })
+ const [biometric, setBiometric] = useState<{
+  fingerprintImage: string | File
+  fingerprintHash: string
+  passphrase: string
+}>({
+  fingerprintImage: "",
+  fingerprintHash: "",
+  passphrase: "",
+})
+
 
   const [loading, setLoading] = useState(false)
   const [showSecretKeyModal, setShowSecretKeyModal] = useState(false)
@@ -112,30 +118,79 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
   }
 
   const handleStep3Complete = async () => {
-    if (!biometric.fingerprintImage) {
-      toast.error("Please upload fingerprint image")
-      return
+  // 1️⃣ Validate fingerprint image
+  if (!biometric.fingerprintImage) {
+    toast.error("Please upload fingerprint image")
+    return
+  }
+
+  setLoading(true)
+  toast.loading("Generating enrollment commitment...")
+
+  try {
+    // 2️⃣ Prepare form data exactly as backend expects
+    const formData = new FormData()
+    formData.append("full_name", personalInfo.name)
+    formData.append("date_of_birth", personalInfo.dob)
+    formData.append("gender", personalInfo.gender)
+    formData.append("email_id", personalInfo.email)
+    formData.append("mobile_number", personalInfo.mobile)
+    formData.append(
+      "address",
+      `${personalInfo.address1} ${personalInfo.address2}, ${personalInfo.city}, ${personalInfo.state} - ${personalInfo.pin}, ${personalInfo.country}`
+    )
+    formData.append("aadhar_number", govIDs.aadhaar)
+    formData.append("pan_number", govIDs.pan)
+
+    // ✅ Optional passphrase
+    formData.append("passcode", biometric.passphrase || "")
+    console.log(biometric.passphrase)
+
+    // ✅ Handle image correctly
+    let imageFile
+    if (biometric.fingerprintImage instanceof File) {
+      // Case 1: already a File object
+      imageFile = biometric.fingerprintImage
+    } else if (biometric.fingerprintImage.startsWith("data:image")) {
+      // Case 2: base64 string — convert to Blob
+      const response = await fetch(biometric.fingerprintImage)
+      const blob = await response.blob()
+      imageFile = new File([blob], "fingerprint.png", { type: "image/png" })
+    } else {
+      throw new Error("Invalid fingerprint image format")
     }
 
-    setLoading(true)
-    toast.loading("Generating enrollment commitment...")
+    formData.append("image", imageFile)
 
-    await fakeApiCall(2000)
+    // 3️⃣ Send POST request to FastAPI
+    const response = await axios.post("http://127.0.0.1:8000/register", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
 
-    const hash = generateHash(biometric.fingerprintImage)
-    const secretKey = generateSecretKey()
+    // 4️⃣ Handle backend response
+    if (response.status === 200) {
+      toast.dismiss()
+      toast.success(response.data.message || "Enrollment completed successfully!")
 
-    setBiometric((prev) => ({ ...prev, fingerprintHash: hash }))
-    setTempBiometricData({ ...biometric, fingerprintHash: hash })
+      // Optional: save temporary data for next step
+      setTempBiometricData({ ...biometric })
+      setBiometric((prev) => ({ ...prev, fingerprintHash: "stored" }))
 
-    completeRegistration(secretKey)
-
-    setGeneratedSecretKey(secretKey)
-    setLoading(false)
+      // Open secret key modal
+      setShowSecretKeyModal(true)
+    } else {
+      toast.dismiss()
+      toast.error("Registration failed. Please try again.")
+    }
+  } catch (error) {
+    console.error("Error registering user:", error)
     toast.dismiss()
-    toast.success("Enrollment completed successfully!")
-    setShowSecretKeyModal(true)
+    toast.error("Failed to register user. Check console for details.")
+  } finally {
+    setLoading(false)
   }
+}
+
 
   const handleModalClose = () => {
     setShowSecretKeyModal(false)
@@ -339,7 +394,7 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
                   />
                 </div>
 
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <Label htmlFor="passport">Passport Number (Optional)</Label>
                   <Input
                     id="passport"
@@ -347,9 +402,9 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
                     value={govIDs.passport}
                     onChange={(e) => setGovIDs((prev) => ({ ...prev, passport: e.target.value }))}
                   />
-                </div>
+                </div> */}
 
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <Label htmlFor="voterId">Voter ID (Optional)</Label>
                   <Input
                     id="voterId"
@@ -357,10 +412,10 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
                     value={govIDs.voterId}
                     onChange={(e) => setGovIDs((prev) => ({ ...prev, voterId: e.target.value }))}
                   />
-                </div>
+                </div> */}
               </div>
 
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label>Upload ID Documents</Label>
                 <FileUpload
                   onFilesChange={(files) => setGovIDs((prev) => ({ ...prev, idFiles: files }))}
@@ -369,7 +424,7 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
                   label="Upload scans of your government IDs"
                   multiple={true}
                 />
-              </div>
+              </div> */}
 
               <div className="flex justify-between pt-4">
                 <Button variant="outline" onClick={() => setRegistrationStep(1)}>
@@ -421,14 +476,20 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
                   <Input
                     id="passphrase"
                     type="password"
-                    placeholder="Enter an additional secret passphrase"
+                    placeholder="Enter a 6-character alphanumeric passphrase"
                     value={biometric.passphrase}
-                    onChange={(e) => setBiometric((prev) => ({ ...prev, passphrase: e.target.value }))}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (/^[A-Za-z0-9]{0,6}$/.test(value)) {
+                        setBiometric((prev) => ({ ...prev, passphrase: value }))
+                      }
+                    }}
                   />
                   <p className="text-xs text-muted-foreground">
                     This passphrase adds an extra layer of security to your enrollment
                   </p>
                 </div>
+
 
                 {biometric.fingerprintHash && (
                   <div className="p-4 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
@@ -457,7 +518,8 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
         </Card>
       </motion.div>
 
-      <SecretKeyModal isOpen={showSecretKeyModal} secretKey={generatedSecretKey} onClose={handleModalClose} />
+      <SecretKeyModal isOpen={showSecretKeyModal} onClose={handleModalClose} />
+
     </div>
   )
 }
