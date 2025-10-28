@@ -155,19 +155,25 @@ async def verify_user(
     if not user:
         return {"message": "User not found"}, 404
 
-    # 6️⃣ Decrypt fields
-    decrypted_data = {
-        "user_id": user.user_id,
-        "full_name": aes_decrypt(user.full_name, key),
-        "date_of_birth": aes_decrypt(user.date_of_birth, key),
-        "gender": aes_decrypt(user.gender, key),
-        "email_id": user.email_id,
-        "mobile_number": aes_decrypt(user.mobile_number, key),
-        "address": aes_decrypt(user.address, key),
-        "aadhar_number": aes_decrypt(user.aadhar_number, key),
-        "pan_number": aes_decrypt(user.pan_number, key)
-    }
+    # 6️⃣ Attempt to decrypt fields
+    try:
+        decrypted_data = {
+            "user_id": user.user_id,
+            "full_name": aes_decrypt(user.full_name, key),
+            "date_of_birth": aes_decrypt(user.date_of_birth, key),
+            "gender": aes_decrypt(user.gender, key),
+            "email_id": user.email_id,
+            "mobile_number": aes_decrypt(user.mobile_number, key),
+            "address": aes_decrypt(user.address, key),
+            "aadhar_number": aes_decrypt(user.aadhar_number, key),
+            "pan_number": aes_decrypt(user.pan_number, key),
+        }
 
-    return {"status": "Verification successful", "user_data": decrypted_data}
+    except ValueError as e:
+        # This usually means the AES key (derived from fingerprint + passcode) is wrong
+        if "Invalid padding" in str(e):
+            return {"message": "Passcode does not match fingerprint"}, 401
+        else:
+            return {"message": f"Decryption error: {str(e)}"}, 400
 
     
