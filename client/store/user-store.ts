@@ -27,7 +27,7 @@ export type GovernmentIDs = {
 }
 
 export type BiometricData = {
-  fingerprintImage: string // data URL
+  fingerprintImage: string | File // data URL
   fingerprintHash: string
   passphrase?: string
 }

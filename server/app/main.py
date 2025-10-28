@@ -10,8 +10,19 @@ from Crypto.Util.Padding import unpad
 from app.db import Base, engine, SessionLocal
 from fastapi.responses import JSONResponse
 import numpy as np
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 
 # Create all tables (if models exist)
 Base.metadata.create_all(bind=engine)
@@ -176,4 +187,4 @@ async def verify_user(
         else:
             return {"message": f"Decryption error: {str(e)}"}, 400
 
-    
+    return {"message": "Verification successful", "data": decrypted_data}
