@@ -5,8 +5,8 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'V0-Zk proof identity portal',
+  description: 'V0-Zk proof by grp 1',
   generator: 'v0.app',
 }
 
