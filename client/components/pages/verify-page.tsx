@@ -2,265 +2,258 @@
 
 import { useState } from "react"
 import { motion } from "motion/react"
+import axios from "axios"
 import { Button } from "../ui/button"
-import { Label } from "../ui/label"
-import { Textarea } from "../ui/textarea"
 import { Card } from "../ui/card"
-import { Shield, CheckCircle, XCircle } from "lucide-react"
-import { fakeApiCall, formatDateTime } from "../../utils/localHelpers" // swap imports to local helpers filenames
+import { Input } from "../ui/input"
+import { Label } from "../ui/label"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "../ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog"
 import { toast } from "sonner"
-import { Alert, AlertDescription } from "../ui/alert"
+import { Shield, CheckCircle, XCircle, Loader2 } from "lucide-react"
 
 export function VerifyPage() {
-  const [proofJSON, setProofJSON] = useState("")
+  const [fingerprint, setFingerprint] = useState<File | null>(null)
+  const [passcode, setPasscode] = useState("")
+  const [conditions, setConditions] = useState<any[]>([])
+  const [selectedField, setSelectedField] = useState("")
   const [loading, setLoading] = useState(false)
-  const [verificationResult, setVerificationResult] = useState<any>(null)
+  const [showResultModal, setShowResultModal] = useState(false)
+  const [resultData, setResultData] = useState<any>(null)
+  const [fieldResults, setFieldResults] = useState<any[]>([])
+
+  const fieldOptions = [
+    { label: "Full Name", value: "full_name", type: "string" },
+    { label: "Age", value: "date_of_birth", type: "number" },
+    { label: "Email ID", value: "email_id", type: "string" },
+    { label: "Mobile Number", value: "mobile_number", type: "string" },
+    { label: "City Name", value: "address", type: "string" },
+    { label: "Gender", value: "gender", type: "string" },
+  ]
+
+  const addCondition = () => {
+    if (!selectedField) return toast.error("Select a field first")
+    const exists = conditions.some((c) => c.field === selectedField)
+    if (exists) return toast.error("Field already added")
+    setConditions([...conditions, { field: selectedField, condition: "equals", value: "" }])
+    setSelectedField("")
+  }
+
+  const updateCondition = (index: number, key: string, value: string) => {
+    const newConditions = [...conditions]
+    newConditions[index][key] = value
+    setConditions(newConditions)
+  }
+
+  const getFieldLabel = (value: string) => {
+    return fieldOptions.find((f) => f.value === value)?.label || value
+  }
+
+  const calculateAge = (dob: string) => {
+    const birthYear = new Date(dob).getFullYear()
+    return new Date().getFullYear() - birthYear
+  }
 
   const handleVerify = async () => {
-    if (!proofJSON.trim()) {
-      toast.error("Please paste a proof JSON to verify")
+    if (!fingerprint || !passcode) {
+      toast.error("Please upload fingerprint and enter passcode")
       return
     }
 
     setLoading(true)
-    toast.loading("Verifying proof...")
+    toast.loading("Verifying details...")
 
-    await fakeApiCall(2000)
+    const formData = new FormData()
+    formData.append("image", fingerprint)
+    formData.append("passcode", passcode)
 
     try {
-      const proof = JSON.parse(proofJSON)
+      const res = await axios.post("http://127.0.0.1:8000/verify", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
 
-      // Simulate verification logic
-      const isValid = Math.random() > 0.2 // 80% success rate for demo
-      const isRevoked = Math.random() > 0.9 // 10% revoked for demo
-
-      const result = {
-        valid: isValid && !isRevoked,
-        proofId: proof.id || "N/A",
-        predicate: proof.predicate || "N/A",
-        timestamp: proof.timestamp || new Date().toISOString(),
-        fingerprintMatch: isValid,
-        secretKeyMatch: isValid,
-        credentialStatus: isRevoked ? "revoked" : "active",
-        blockchainRoot: `0x${Math.random().toString(16).substring(2, 15)}`,
-        verifiedAt: new Date().toISOString(),
-      }
-
-      setVerificationResult(result)
-      setLoading(false)
       toast.dismiss()
+      toast.success("Verification successful!")
 
-      if (result.valid) {
-        toast.success("Proof verified successfully!")
-      } else if (isRevoked) {
-        toast.error("Credential has been revoked")
-      } else {
-        toast.error("Proof verification failed")
-      }
-    } catch (error) {
-      setLoading(false)
+      const data = res.data.data
+      const results = conditions.map((c) => {
+        const apiValue = data[c.field]
+        let check = false
+
+        if (c.field === "date_of_birth") {
+          const userAge = calculateAge(apiValue)
+          const inputAge = parseInt(c.value)
+          if (c.condition === "equals") check = userAge === inputAge
+          else if (c.condition === "greater") check = userAge > inputAge
+          else if (c.condition === "less") check = userAge < inputAge
+        } else if (c.field === "address") {
+          check = apiValue.toLowerCase().includes(c.value.toLowerCase())
+        } else {
+          check = String(apiValue).toLowerCase() === c.value.toLowerCase()
+        }
+
+        return { ...c, apiValue, check }
+      })
+
+      setResultData(data)
+      setFieldResults(results)
+      setShowResultModal(true)
+    } catch (err: any) {
       toast.dismiss()
-      toast.error("Invalid proof JSON format")
-      setVerificationResult({ error: "Invalid JSON format" })
+      if (err.response?.status === 401) toast.error(err.response.data?.message || "Verification failed")
+      else toast.error("Error verifying user")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleReset = () => {
-    setProofJSON("")
-    setVerificationResult(null)
-  }
-
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-4 py-8 max-w-3xl">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-full mb-4">
             <Shield className="h-4 w-4 text-blue-600" />
-            <span className="text-sm text-blue-600 dark:text-blue-400">Verifier Portal</span>
+            <span className="text-sm text-blue-600">Verifier Portal</span>
           </div>
-          <h1>Verify Identity Proof</h1>
-          <p className="text-muted-foreground">Verify zero-knowledge proofs without accessing personal data</p>
+          <h1 className="text-2xl font-semibold">Verify User Details</h1>
+          <p className="text-muted-foreground text-sm">
+            Upload fingerprint and passcode to verify selected attributes securely
+          </p>
         </div>
 
-        <Card className="p-8">
-          {!verificationResult ? (
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-              <div>
-                <h2 className="mb-4">Submit Proof for Verification</h2>
-                <p className="text-sm text-muted-foreground mb-6">Paste the proof JSON received from the user</p>
-              </div>
+        <Card className="p-8 space-y-6">
+          <div>
+            <Label>Fingerprint Image</Label>
+            <Input type="file" accept="image/*" onChange={(e) => setFingerprint(e.target.files?.[0] || null)} />
+          </div>
 
-              <Alert>
-                <Shield className="h-4 w-4" />
-                <AlertDescription>
-                  This verification process checks the proof validity, credential status, and blockchain revocation root
-                  without revealing any personal information.
-                </AlertDescription>
-              </Alert>
+          <div>
+            <Label>Passcode</Label>
+            <Input placeholder="Enter your passcode" value={passcode} onChange={(e) => setPasscode(e.target.value)} />
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="proofJSON">Proof JSON</Label>
-                <Textarea
-                  id="proofJSON"
-                  placeholder='Paste the proof JSON here, e.g.:
-{
-  "id": "PRF-1234567890",
-  "proofHash": "proof_abc123...",
-  "predicate": "Age ≥ 18",
-  ...
-}'
-                  value={proofJSON}
-                  onChange={(e) => setProofJSON(e.target.value)}
-                  className="min-h-[300px] font-mono text-sm"
-                />
-              </div>
+          <div>
+            <Label>Select Field to Verify</Label>
+            <div className="flex gap-2 mt-2">
+              <Select value={selectedField} onValueChange={setSelectedField}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Choose field" />
+                </SelectTrigger>
+                <SelectContent>
+                  {fieldOptions.map((f) => (
+                    <SelectItem key={f.value} value={f.value}>
+                      {f.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button onClick={addCondition} variant="outline">
+                Add
+              </Button>
+            </div>
+          </div>
 
-              <div className="flex gap-3">
-                <Button
-                  onClick={handleVerify}
-                  disabled={loading}
-                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600"
-                >
-                  {loading ? "Verifying..." : "Verify Proof"}
-                  <Shield className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
-              {verificationResult.error ? (
-                <div className="text-center">
-                  <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
-                    <XCircle className="h-8 w-8 text-red-600" />
-                  </div>
-                  <h2 className="mb-2 text-red-600">Verification Failed</h2>
-                  <p className="text-muted-foreground">{verificationResult.error}</p>
-                </div>
-              ) : verificationResult.valid ? (
-                <>
-                  <div className="text-center">
-                    <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle className="h-8 w-8 text-green-600" />
-                    </div>
-                    <h2 className="mb-2 text-green-600">Proof Verified Successfully</h2>
-                    <p className="text-muted-foreground">Identity matched with Secret Key and Fingerprint</p>
-                  </div>
+          {conditions.length > 0 && (
+            <div className="border rounded-lg p-4 space-y-3">
+              <h3 className="text-sm font-medium mb-2">Conditions</h3>
+              {conditions.map((c, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                  <span className="text-sm font-medium">{getFieldLabel(c.field)}</span>
 
-                  <Card className="p-6 bg-green-50 dark:bg-green-950/30 border-2 border-green-200 dark:border-green-800">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="h-5 w-5" />
-                        <span>Proof is valid and authentic</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="h-5 w-5" />
-                        <span>Fingerprint biometric matched</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="h-5 w-5" />
-                        <span>Secret key verification passed</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="h-5 w-5" />
-                        <span>Credential is active (not revoked)</span>
-                      </div>
-                    </div>
-                  </Card>
-                </>
-              ) : (
-                <>
-                  <div className="text-center">
-                    <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
-                      <XCircle className="h-8 w-8 text-red-600" />
-                    </div>
-                    <h2 className="mb-2 text-red-600">Verification Failed</h2>
-                    <p className="text-muted-foreground">
-                      {verificationResult.credentialStatus === "revoked"
-                        ? "The credential has been revoked"
-                        : "Invalid proof or credential mismatch"}
-                    </p>
-                  </div>
-
-                  <Card className="p-6 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-800">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-red-600">
-                        <XCircle className="h-5 w-5" />
-                        <span>
-                          {verificationResult.credentialStatus === "revoked"
-                            ? "Credential has been revoked"
-                            : "Proof validation failed"}
-                        </span>
-                      </div>
-                      {!verificationResult.fingerprintMatch && (
-                        <div className="flex items-center gap-2 text-red-600">
-                          <XCircle className="h-5 w-5" />
-                          <span>Fingerprint mismatch</span>
-                        </div>
-                      )}
-                      {!verificationResult.secretKeyMatch && (
-                        <div className="flex items-center gap-2 text-red-600">
-                          <XCircle className="h-5 w-5" />
-                          <span>Secret key mismatch</span>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                </>
-              )}
-
-              <div className="p-4 bg-muted rounded-lg space-y-3">
-                <h3>Verification Details</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Proof ID:</span>
-                    <span>{verificationResult.proofId}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Predicate:</span>
-                    <span>{verificationResult.predicate}</span>
-                  </div>
-                  {verificationResult.timestamp && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Proof Timestamp:</span>
-                      <span>{formatDateTime(verificationResult.timestamp)}</span>
-                    </div>
+                  {c.field === "date_of_birth" ? (
+                    <Select value={c.condition} onValueChange={(val) => updateCondition(i, "condition", val)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="equals">equals</SelectItem>
+                        <SelectItem value="greater">greater</SelectItem>
+                        <SelectItem value="less">less</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">equals</span>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Verified At:</span>
-                    <span>{formatDateTime(verificationResult.verifiedAt)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Credential Status:</span>
-                    <span
-                      className={verificationResult.credentialStatus === "active" ? "text-green-600" : "text-red-600"}
-                    >
-                      {verificationResult.credentialStatus}
-                    </span>
-                  </div>
+
+                  <Input
+                    placeholder="Enter value"
+                    value={c.value}
+                    onChange={(e) => updateCondition(i, "value", e.target.value)}
+                  />
+
+                  {/* ❌ Remove button */}
+                  <button
+                    type="button"
+                    onClick={() => setConditions((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="text-red-500 hover:text-red-700 text-sm px-2 transition-colors"
+                    title="Remove condition"
+                  >
+                    ✕
+                  </button>
                 </div>
-              </div>
-
-              {verificationResult.blockchainRoot && (
-                <Card className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-                  <div className="flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="text-sm mb-1">Blockchain Revocation Root</h4>
-                      <code className="text-xs break-all">{verificationResult.blockchainRoot}</code>
-                    </div>
-                  </div>
-                </Card>
-              )}
-
-              <div className="flex gap-3">
-                <Button onClick={handleReset} variant="outline" className="flex-1 bg-transparent">
-                  Verify Another Proof
-                </Button>
-              </div>
-            </motion.div>
+              ))}
+            </div>
           )}
+
+
+          <Button
+            onClick={handleVerify}
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-blue-500 to-purple-600"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin mr-2 h-4 w-4" />
+                Verifying...
+              </>
+            ) : (
+              "Verify Details"
+            )}
+          </Button>
         </Card>
       </motion.div>
+
+      {/* ✅ Result Modal */}
+      <Dialog open={showResultModal} onOpenChange={setShowResultModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-blue-600" />
+              Verification Summary
+            </DialogTitle>
+          </DialogHeader>
+
+          {fieldResults.length > 0 ? (
+            <div className="space-y-4">
+              {fieldResults.map((r, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center justify-between rounded-lg border p-3 ${
+                    r.check ? "border-green-400 bg-green-50" : "border-red-400 bg-red-50"
+                  }`}
+                >
+                  <div>
+                    <p className="font-medium">{getFieldLabel(r.field)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Expected: {r.condition} {r.value}
+                    </p>
+                  </div>
+                  {r.check ? (
+                    <CheckCircle className="text-green-600 h-5 w-5" />
+                  ) : (
+                    <XCircle className="text-red-600 h-5 w-5" />
+                  )}
+                </div>
+              ))}
+              <div className="flex justify-end">
+                <Button onClick={() => setShowResultModal(false)}>Close</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground">No verification data found.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
