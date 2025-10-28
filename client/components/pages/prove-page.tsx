@@ -12,7 +12,7 @@ import { FileUpload } from "../file-upload"
 import { Shield, FileCheck, Fingerprint, Key, Copy, CheckCircle, AlertCircle } from "lucide-react"
 import { useUserStore } from "../../store/user-store"
 import { generateProofHash, generateHash, fakeApiCall, copyToClipboard, formatDateTime } from "../../utils/helpers"
-import { toast } from "sonner@2.0.3"
+import { toast } from "sonner"
 import { Alert, AlertDescription } from "../ui/alert"
 
 interface ProvePageProps {

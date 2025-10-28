@@ -8,7 +8,7 @@ import { Textarea } from "../ui/textarea"
 import { Card } from "../ui/card"
 import { Shield, CheckCircle, XCircle } from "lucide-react"
 import { fakeApiCall, formatDateTime } from "../../utils/localHelpers" // swap imports to local helpers filenames
-import { toast } from "sonner@2.0.3"
+import { toast } from "sonner"
 import { Alert, AlertDescription } from "../ui/alert"
 
 export function VerifyPage() {

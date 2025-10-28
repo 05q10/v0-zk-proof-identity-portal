@@ -21,7 +21,7 @@ import { Badge } from "../ui/badge"
 import { Shield, Plus, XCircle, RefreshCw, UserCheck } from "lucide-react"
 import { useUserStore, type Credential } from "../../store/user-store"
 import { fakeApiCall, formatDate, generateHash } from "../../utils/helpers"
-import { toast } from "sonner@2.0.3"
+import { toast } from "sonner"
 import { Alert, AlertDescription } from "../ui/alert"
 
 export function IssuerPage() {
