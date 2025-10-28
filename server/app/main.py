@@ -137,7 +137,7 @@ async def verify_user(
     faiss_store = FaissStore()
     results = faiss_store.search_similar(query_embedding, k=1)
 
-    if not results or results[0][1] < 0.85:  # similarity threshold
+    if not results or results[0][1] < 0.9:  # similarity threshold
         return {"message": "Fingerprint not recognized"}, 401
 
     matched_user_id = results[0][0]
@@ -175,5 +175,8 @@ async def verify_user(
             return {"message": "Passcode does not match fingerprint"}, 401
         else:
             return {"message": f"Decryption error: {str(e)}"}, 400
+
+        # 7️⃣ Return decrypted user data
+    return {"status": "success", "user_data": decrypted_data}, 200
 
     
