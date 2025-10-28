@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+numpy
+opencv-python
+faiss-cpu
+torch
+Pillow
+pycryptodome
+python-multipart
+pydantic
+email-validator
