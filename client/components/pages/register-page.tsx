@@ -163,7 +163,7 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
     formData.append("image", imageFile)
 
     // 3️⃣ Send POST request to FastAPI
-    const response = await axios.post("http://127.0.0.1:8000/register", formData, {
+    const response = await axios.post("https://b4bbf4f21e30.ngrok-free.app/register", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     })
 
