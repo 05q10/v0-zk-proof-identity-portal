@@ -1,0 +1,5 @@
+Step,Mean (ms),StdDev (ms),Trials
+embedding,53.18,99.97,5
+compare,8.22,0.54,5
+hash,5.07,11.17,5
+pipeline,8.66,0.45,5
