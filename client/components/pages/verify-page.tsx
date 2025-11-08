@@ -68,7 +68,7 @@ export function VerifyPage() {
     formData.append("passcode", passcode)
 
     try {
-      const res = await axios.post("https://b4bbf4f21e30.ngrok-free.app/verify", formData, {
+      const res = await axios.post("http://127.0.0.1:8000/verify", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       })
 
