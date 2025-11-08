@@ -2,7 +2,9 @@ import cv2
 import torch
 import torch.nn.functional as F
 from torchvision import transforms, models
-import hashlib
+import hashlib, hmac
+
+_SECRET_KEY = b"SuperSecretKey_32bytes_length!!!"
 
 # -----------------------------
 # 1️⃣ Model + Preprocessing Setup
@@ -76,7 +78,7 @@ def embedding_to_sha256(embedding: torch.Tensor, code: str) -> str:
     combined = arr_bytes + code.encode('utf-8')
 
     # Compute SHA-256
-    sha256_hash = hashlib.sha256(combined).hexdigest()
+    sha256_hash = hmac.new(_SECRET_KEY, combined, hashlib.sha256).hexdigest()
     return sha256_hash
 
 # -----------------------------
